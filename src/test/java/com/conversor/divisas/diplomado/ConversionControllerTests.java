@@ -1,12 +1,9 @@
 package com.conversor.divisas.diplomado;
 
-import com.conversor.divisas.diplomado.controller.ConversionController;
-import com.conversor.divisas.diplomado.service.ConversionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -21,9 +18,6 @@ public class ConversionControllerTests {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private ConversionService conversionService;
 
     @Test
     void testHealthEndpoint() throws Exception {
@@ -62,7 +56,7 @@ public class ConversionControllerTests {
         String requestBody = "{\"monto\": 100, \"monedaOrigen\": \"USD\", \"monedaDestino\": \"EUR\"}";
         
         mockMvc.perform(post("/api/v1/convertir")
-            .contentType(MediaType.APPLICATION_JSON)
+            .contentType("application/json")
             .content(requestBody))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.montoOriginal").value(100.0))
@@ -84,7 +78,7 @@ public class ConversionControllerTests {
         String requestBody = "{\"monto\": -50, \"monedaOrigen\": \"USD\", \"monedaDestino\": \"EUR\"}";
         
         mockMvc.perform(post("/api/v1/convertir")
-            .contentType(MediaType.APPLICATION_JSON)
+            .contentType("application/json")
             .content(requestBody))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").exists());
