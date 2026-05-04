@@ -1,0 +1,162 @@
+trigger:
+  - main
+  - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  MAVEN_CACHE_FOLDER: $(Pipeline.Workspace)/.m2/repository
+  MAVEN_OPTS: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+
+stages:
+  - stage: Build
+    displayName: 'Build & Compile'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build Project'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Setup Java 21'
+            inputs:
+              version: '21.x'
+              packageType: 'jdk'
+
+          - task: Cache@2
+            displayName: 'Cache Maven Dependencies'
+            inputs:
+              key: 'maven | "$(Agent.OS)" | **/pom.xml'
+              restoreKeys: |
+                maven | "$(Agent.OS)"
+                maven
+              path: $(MAVEN_CACHE_FOLDER)
+
+          - task: Maven@3
+            displayName: 'Maven Clean'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              mavenOptions: '-Xmx3072m $(MAVEN_OPTS)'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.21'
+              jdkArchitectureOption: 'x64'
+              publishJUnitResults: false
+              goals: 'clean'
+
+          - task: Maven@3
+            displayName: 'Maven Compile'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              mavenOptions: '-Xmx3072m $(MAVEN_OPTS)'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.21'
+              jdkArchitectureOption: 'x64'
+              publishJUnitResults: false
+              goals: 'compile'
+
+  - stage: Test
+    displayName: 'Unit & Integration Tests'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - job: TestJob
+        displayName: 'Run Tests'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Setup Java 21'
+            inputs:
+              version: '21.x'
+              packageType: 'jdk'
+
+          - task: Cache@2
+            displayName: 'Cache Maven Dependencies'
+            inputs:
+              key: 'maven | "$(Agent.OS)" | **/pom.xml'
+              restoreKeys: |
+                maven | "$(Agent.OS)"
+                maven
+              path: $(MAVEN_CACHE_FOLDER)
+
+          - task: Maven@3
+            displayName: 'Maven Test'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              mavenOptions: '-Xmx3072m $(MAVEN_OPTS)'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.21'
+              jdkArchitectureOption: 'x64'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              goals: 'test'
+
+          - task: PublishCodeCoverageResults@1
+            displayName: 'Publish Code Coverage'
+            condition: succeeded()
+            inputs:
+              codeCoverageTool: Cobertura
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
+
+  - stage: Package
+    displayName: 'Package & Build'
+    dependsOn: Test
+    condition: succeeded()
+    jobs:
+      - job: PackageJob
+        displayName: 'Package Application'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Setup Java 21'
+            inputs:
+              version: '21.x'
+              packageType: 'jdk'
+
+          - task: Cache@2
+            displayName: 'Cache Maven Dependencies'
+            inputs:
+              key: 'maven | "$(Agent.OS)" | **/pom.xml'
+              restoreKeys: |
+                maven | "$(Agent.OS)"
+                maven
+              path: $(MAVEN_CACHE_FOLDER)
+
+          - task: Maven@3
+            displayName: 'Maven Package'
+            inputs:
+              mavenPomFile: 'pom.xml'
+              mavenOptions: '-Xmx3072m $(MAVEN_OPTS)'
+              javaHomeOption: 'JDKVersion'
+              jdkVersionOption: '1.21'
+              jdkArchitectureOption: 'x64'
+              publishJUnitResults: false
+              goals: 'package -DskipTests'
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Artifacts'
+            inputs:
+              PathtoPublish: '$(System.DefaultWorkingDirectory)/target'
+              ArtifactName: 'build-artifacts'
+              publishLocation: 'Container'
+
+  - stage: Deploy
+    displayName: 'Deploy to Azure'
+    dependsOn: Package
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: DeployJob
+        displayName: 'Deploy to Azure App Service'
+        steps:
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download Artifacts'
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'build-artifacts'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - task: AzureWebApp@1
+            displayName: 'Deploy to App Service'
+            inputs:
+              azureSubscription: '$(AZURE_SUBSCRIPTION)' # Configurar en Azure DevOps
+              appType: 'webAppLinux'
+              appName: '$(AZURE_APP_NAME)' # Configurar en Azure DevOps
+              package: '$(System.ArtifactsDirectory)/build-artifacts/diplomado-0.0.1-SNAPSHOT.jar'
+              runtimeStack: 'JAVA|21'
