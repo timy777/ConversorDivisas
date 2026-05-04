@@ -360,10 +360,10 @@ ConversorDivisas/
 
 ## 👥 Contribuidores
 
-- **Integrante 1**: Creación del proyecto
-- **Integrante 2**: Configuración del pipeline
-- **Integrante 3**: Validación de APIs
-- **Integrante 4**: Documentación
+- **Abelar Alvarez Lijeron**: Creación del proyecto
+- **Carlos Mauricio Cabrita Andrade**: Configuración del pipeline
+- **Miguel Angel Escobar Lazcano**: Validación de APIs
+- **Ronald Nelson Villca Quiroga**: Documentación
 
 ## 📄 Licencia
 
