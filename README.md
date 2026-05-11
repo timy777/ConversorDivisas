@@ -119,6 +119,91 @@ Ejemplo:
 GET /api/v1/convertir/USD/EUR/100
 ```
 
+### 6. Crear Nueva Moneda (en memoria)
+
+```bash
+POST /api/v1/monedas
+Content-Type: application/json
+
+{
+  "codigo": "PEN",
+  "nombre": "Sol Peruano",
+  "simbolo": "S/",
+  "tasa": 3.75
+}
+```
+
+- `201 Created` si se guarda.
+- `409 Conflict` si el código ya existe.
+- `400 Bad Request` si los datos son inválidos (código vacío, tasa ≤ 0, etc.).
+
+### 7. Actualizar Moneda
+
+```bash
+PUT /api/v1/monedas/{codigo}
+Content-Type: application/json
+
+{
+  "codigo": "EUR",
+  "nombre": "Euro Actualizado",
+  "simbolo": "€",
+  "tasa": 0.95
+}
+```
+
+- `200 OK` con la moneda actualizada.
+- `404 Not Found` si el código no existe.
+
+### 8. Eliminar Moneda
+
+```bash
+DELETE /api/v1/monedas/{codigo}
+```
+
+Respuesta:
+
+```json
+{
+  "mensaje": "Moneda eliminada",
+  "codigo": "PEN"
+}
+```
+
+### 9. Historial de Conversiones
+
+```bash
+GET /api/v1/convertir/historial
+```
+
+Devuelve un arreglo con todas las conversiones realizadas desde que arrancó
+la aplicación (almacenadas en memoria).
+
+Para limpiar el historial:
+
+```bash
+DELETE /api/v1/convertir/historial
+```
+
+### 10. Estadísticas
+
+```bash
+GET /api/v1/estadisticas
+```
+
+**Respuesta:**
+
+```json
+{
+  "totalMonedas": 9,
+  "totalConversiones": 3,
+  "usoPorMoneda": {
+    "USD": 2,
+    "EUR": 1
+  },
+  "monedaMasUsada": "USD"
+}
+```
+
 ## 💰 Monedas Soportadas
 
 | Código | Nombre | Símbolo | Tasa (vs USD) |
@@ -131,6 +216,7 @@ GET /api/v1/convertir/USD/EUR/100
 | ARS | Peso Argentino | $ | 900.0 |
 | BRL | Real Brasileño | R$ | 5.0 |
 | JPY | Yen Japonés | ¥ | 150.0 |
+| BOB | Boliviano | Bs | 6.96 |
 
 ## 🛠️ Requisitos Previos
 
@@ -277,16 +363,47 @@ ConversorDivisas/
 ./mvnw clean test
 ```
 
-### Tests Disponibles
+### Tests Disponibles (41 tests en total)
 
-- ✅ Health endpoint
-- ✅ Obtener todas las monedas
-- ✅ Obtener moneda específica
-- ✅ Convertir USD a EUR
-- ✅ Validación de montos negativos
-- ✅ Monedas no existentes
-- ✅ Case insensitive
-- ✅ Conversiones múltiples
+**`ConversionServiceTests` (22 tests unitarios):**
+
+- ✅ Obtener catálogo de monedas
+- ✅ Obtener moneda existente / inexistente
+- ✅ Convertir USD ↔ EUR ↔ GBP (cadena y directa)
+- ✅ Conversión a la misma moneda
+- ✅ Case insensitive (`usd` == `USD`)
+- ✅ Conversión con moneda inválida lanza excepción
+- ✅ Crear moneda nueva (PEN)
+- ✅ Crear moneda con código en minúsculas se normaliza
+- ✅ Crear moneda duplicada falla
+- ✅ Crear moneda con tasa inválida falla
+- ✅ Actualizar moneda existente
+- ✅ Actualizar moneda inexistente falla
+- ✅ Eliminar moneda existente / inexistente
+- ✅ Historial se registra tras cada conversión
+- ✅ Limpiar historial
+- ✅ Estadísticas iniciales (0 conversiones)
+- ✅ Estadísticas calculan la moneda más usada
+
+**`ConversionControllerTests` (18 tests de API con MockMvc):**
+
+- ✅ `GET /api/v1/health`
+- ✅ `GET /api/v1/monedas` y `GET /api/v1/monedas/{codigo}`
+- ✅ `GET /api/v1/monedas/{codigo}` con código inexistente → 404
+- ✅ `POST /api/v1/convertir` (cuerpo JSON)
+- ✅ `GET /api/v1/convertir/{origen}/{destino}/{monto}`
+- ✅ Convertir con monto negativo → 400
+- ✅ Convertir con moneda inexistente → 400
+- ✅ `POST /api/v1/monedas` crea moneda → 201
+- ✅ `POST /api/v1/monedas` duplicada → 409
+- ✅ `POST /api/v1/monedas` con datos inválidos → 400
+- ✅ `PUT /api/v1/monedas/{codigo}` actualiza moneda
+- ✅ `PUT /api/v1/monedas/{codigo}` inexistente → 404
+- ✅ `DELETE /api/v1/monedas/{codigo}` elimina moneda
+- ✅ `DELETE /api/v1/monedas/{codigo}` inexistente → 404
+- ✅ `GET /api/v1/convertir/historial` registra conversiones
+- ✅ `DELETE /api/v1/convertir/historial` limpia historial
+- ✅ `GET /api/v1/estadisticas` reporta moneda más usada
 
 ## 🚀 Despliegue en Azure
 
@@ -310,7 +427,7 @@ ConversorDivisas/
 ### Resultado local validado
 
 - `java -version` y `javac -version`: `openjdk 21.0.11`
-- `./mvnw clean test`: `17 tests`, `0 failures`, `BUILD SUCCESS`
+- `./mvnw clean test`: `41 tests`, `0 failures`, `BUILD SUCCESS`
 - Build del proyecto exitoso con Maven en entorno local
 
 ### Evidencia en GitHub Actions
@@ -339,7 +456,8 @@ ConversorDivisas/
 
 > Se validó el proyecto localmente con Java 21 (`openjdk 21.0.11`).
 > La suite automática se ejecutó con `./mvnw clean test`, obteniendo
-> 17 pruebas exitosas y 0 fallos.
+> 41 pruebas exitosas y 0 fallos (22 unitarias de servicio + 18 de API REST
+> con MockMvc + 1 de contexto Spring).
 > Luego se subieron cambios al repositorio y se ejecutó el pipeline CI en
 > remoto, confirmando compilación, pruebas y empaquetado en estado exitoso.
 
@@ -351,12 +469,58 @@ ConversorDivisas/
 - [ ] Evidencia local (`java -version`, `javac -version`, `./mvnw clean test`)
 - [ ] Evidencia de participación del equipo (commits/PR por integrante)
 
+## ☁️ Análisis de Despliegue Cloud (Práctica 2)
+
+### Comando de ejecución local validado
+
+```bash
+./mvnw clean package -DskipTests
+java -jar target/diplomado-0.0.1-SNAPSHOT.jar
+```
+
+La aplicación queda disponible en `http://localhost:8080`.
+
+### ¿Cómo se desplegaría esta aplicación en la nube?
+
+La aplicación es un microservicio REST Spring Boot empaquetado como JAR
+ejecutable. Las opciones de despliegue evaluadas:
+
+1. **Azure App Service for Java** (recomendado para esta práctica):
+   - Subir el artefacto `target/diplomado-0.0.1-SNAPSHOT.jar`.
+   - Runtime: `JAVA|21` en App Service Linux.
+   - Pipeline ya configurado en `azure-pipelines.yml` (stage `Deploy`).
+2. **Contenedor Docker** sobre Azure Container Apps / AWS ECS / Google Cloud Run:
+   - Imagen base `eclipse-temurin:21-jre`.
+   - Auto-escalado por demanda y pago por uso.
+3. **AWS Elastic Beanstalk** con plataforma Corretto 21 (similar a App Service).
+
+### ¿Qué modelo: IaaS, PaaS o SaaS?
+
+**Modelo elegido: PaaS (Platform as a Service)**.
+
+| Modelo | ¿Aplica? | Justificación |
+| ------ | -------- | ------------- |
+| IaaS | ❌ | Implicaría administrar VM, parches del SO y JRE manualmente; sobrecarga innecesaria para una API stateless. |
+| **PaaS** | ✅ | Azure App Service / AWS Beanstalk gestionan SO, JVM, escalado horizontal, certificados HTTPS, logs y zero-downtime deploys. Solo subimos el JAR. |
+| SaaS | ❌ | No corresponde: no estamos consumiendo un software terminado, estamos publicando uno propio. |
+
+### Consideraciones para producción
+
+- Las tasas y el historial están **en memoria**: para producción reemplazar
+  por una base de datos (PostgreSQL en Azure Database, por ejemplo) y un
+  caché tipo Redis para las tasas obtenidas de una API externa.
+- Habilitar Application Insights / CloudWatch para métricas.
+- Configurar variables de entorno (`SPRING_PROFILES_ACTIVE`, credenciales)
+  en el App Service en lugar de en `application.properties`.
+
 ## 📝 Notas
 
 - Las tasas de cambio son simuladas (en producción usar API externa)
 - Todos los montos deben ser mayores a 0
 - Los códigos de moneda son case-insensitive
 - Timestamp en milisegundos UTC
+- El catálogo de monedas y el historial se almacenan **en memoria**, por lo
+  que se reinician al reiniciar la aplicación
 
 ## 👥 Contribuidores
 
